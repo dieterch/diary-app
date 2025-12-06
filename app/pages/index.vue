@@ -1,25 +1,36 @@
 <template>
   <div class="page">
 
-    <!-- Globaler Header -->
-    <div class="top-header">
-      <div class="left-icons">☰</div>
-      <div class="title">Tagebuch</div>
-      <div class="right-icons">
-        <button class="add-button" @click="openDialogForNew">+</button>
+    <!-- ⭐ Hamburger Menü Overlay -->
+    <div v-if="menuOpen" class="side-menu" @click.self="menuOpen = false">
+      <div class="menu-panel">
+        <h2>Menü</h2>
+        <button @click="goDiary">📘 Tagebuch</button>
+        <button @click="goAnalysis">📊 Analyse</button>
       </div>
     </div>
 
-    <!-- Tagesgruppen -->
-    <div v-for="(group, date) in grouped" :key="date" class="day-block">
+    <!-- ⭐ Header -->
+    <div class="top-header">
+      <div class="left-icons" @click="menuOpen = !menuOpen">☰</div>
+      <div class="title">Tagebuch</div>
+      <div class="right-icons"></div>
+    </div>
 
-      <!-- Tagesheader -->
-      <div class="day-header">
+    <!-- ⭐ Tagesgruppen -->
+    <div
+      v-for="(group, date) in grouped"
+      :key="date"
+      class="day-block"
+    >
+
+      <!-- Tageskopf → öffnet Tagesprofil -->
+      <div class="day-header" @click="openDayProfile(date)">
         <div class="day-title">{{ weekday(date) }}</div>
         <div class="day-date">{{ formatDate(date) }}</div>
       </div>
 
-      <!-- Einträge -->
+      <!-- ⭐ Einträge -->
       <div
         v-for="(item, idx) in group"
         :key="item.id"
@@ -27,11 +38,10 @@
         @click="editEntry(item)"
         :class="{ last: idx === group.length - 1 }"
       >
-
         <!-- Zeit -->
         <div class="col-time">{{ time(item.date) }}</div>
 
-        <!-- Zucker -->
+        <!-- Blutzucker -->
         <div class="col-sugar">
           <div
             class="sugar-box"
@@ -40,7 +50,7 @@
               color: item.bloodSugar == null ? '#000' : '#fff'
             }"
           >
-            <div class="sugar-value">{{ item.bloodSugar ?? "-" }}</div>
+            <div class="sugar-value">{{ item.bloodSugar ?? '-' }}</div>
             <div class="sugar-unit">mg/dl</div>
           </div>
         </div>
@@ -69,38 +79,56 @@
           <div class="unit">Sport</div>
         </div>
 
-        <!-- Medikamente 
-        <div class="col">
-          <div class="main">{{ item.insulinBolus ?? "/" }}</div>
-          <div class="unit">Medikamente</div>
-        </div> -->
-
         <!-- Notiz -->
         <div class="col note-col" @click.stop="openNote(item)">
           <div class="main note-preview">
-            <!-- <span v-if="item.note">📝 Notiz…</span> -->
             <span v-if="item.note">📝</span>
             <span v-else>/</span>
           </div>
           <div class="unit">Notiz</div>
         </div>
+
       </div>
     </div>
+
+    <!-- Sentinel for Infinite Scroll -->
     <div ref="sentinel" class="sentinel"></div>
+
   </div>
 
+  <!-- ⭐ Modal für Eintrag -->
   <EntryDialog
     v-model="dialogVisible"
     :entry="selectedEntry"
     @saved="reload"
   />
 
+  <!-- ⭐ Modal für Tagesprofil -->
+  <DayProfileModal
+    v-model="showDayModal"
+    :date="modalDate"
+    :entries="entries"
+  />
+
+  <!-- ⭐ Floating Action Button -->
+  <button class="fab" @click="openDialogForNew">
+    <span class="fab-plus">+</span>
+  </button>
 
 </template>
 
 <script setup>
+/* Imports */
 import EntryDialog from '~/components/EntryDialog.vue'
+import DayProfileModal from '~/components/DayProfileModal.vue'
+const router = useRouter()
 
+/* Hamburger Menü */
+const menuOpen = ref(false)
+function goDiary() { router.push("/") }
+function goAnalysis() { router.push("/analysis") }
+
+/* Dialog */
 const dialogVisible = ref(false)
 const selectedEntry = ref(null)
 
@@ -109,190 +137,204 @@ function editEntry(item) {
   dialogVisible.value = true
 }
 
-function addEntry() {
-  selectedEntry.value = null
-  dialogVisible.value = true
-}
-
-// function reload() {
-//   refreshNuxtData()   // lädt /api/entries neu
-// }
-
-const { data: config } = await useFetch("/api/config")
-  
-  
-  // const { data: entries } = await useFetch("/api/entries")
-  const entries = ref([])
-  const loading = ref(false)
-  const finished = ref(false)
-
-  async function reload() {
-    entries.value = []       // Liste zurücksetzen
-    finished.value = false   // infinite scroll wieder aktivieren
-    await loadMore()         // neu laden
-  }
-
-  const TAKE = 100
-
-  async function loadMore() {
-    if (loading.value || finished.value) return
-    loading.value = true
-
-    const skip = entries.value.length
-    const res = await $fetch('/api/entries', {
-      query: { skip, take: TAKE }
-    })
-
-    if (res.length < TAKE) {
-      finished.value = true
-    }
-
-    entries.value = [...entries.value, ...res]
-    loading.value = false
-  }
-
-  // Erste Ladung
-  onMounted(loadMore)
-
-  // Gruppierung basierend auf entries.value
-const grouped = computed(() => {
-  const g = {}
-  if (!entries.value) return g
-
-  // 1. Sortieren nach Datum + Zeit DESC
-  const sorted = [...entries.value].sort((a, b) => {
-    return new Date(b.date) - new Date(a.date)
-  })
-
-  // 2. Gruppieren
-  for (const e of sorted) {
-    const d = e.date.split("T")[0]
-    ;(g[d] ??= []).push(e)
-  }
-
-  return g
-})
-
-
-
-function weekday(dateStr) {
-  return new Date(dateStr)
-    .toLocaleDateString("de-DE", { weekday: "long" })
-    .replace(/^\w/, c => c.toUpperCase())
-}
-function formatDate(dateStr) {
-  return new Date(dateStr).toLocaleDateString("de-DE")
-}
-function time(dt) {
-  return new Date(dt).toLocaleTimeString("de-DE", {
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
-function formatWeight(w) {
-  return w == null ? "/" : Number(w).toFixed(1)
-}
-
-function openNote(item) {
-  alert(item.note || "Keine Notiz")
-}
-
-/* ⭐ Farblogik (nutzt Werte aus configuration.yml) */
-function sugarBackground(value) {
-  if (value == null) return "transparent"   // <-- kein Hintergrund sichtbar
-
-  const low = config.value?.glucose.low ?? 80
-  const target = config.value?.glucose.target ?? 120
-  const high = config.value?.glucose.high ?? 140
-
-  if (value < low * 0.5) return "#b33939"
-  if (value < low) return "#e1a32a"
-  if (value <= high) return "#3cb371"
-  if (value <= high * 1.5) return "#25a7d9"
-  return "#6a0dad"
-}
-
-const sentinel = ref(null)
-
-onMounted(() => {
-  const observer = new IntersectionObserver((entries) => {
-    if (entries[0].isIntersecting) {
-      loadMore()
-    }
-  })
-  observer.observe(sentinel.value)
-})
-
 function openDialogForNew() {
   selectedEntry.value = null
   dialogVisible.value = true
 }
 
+/* Tagesprofil Modal */
+const showDayModal = ref(false)
+const modalDate = ref(null)
+
+function openDayProfile(date) {
+  modalDate.value = date
+  showDayModal.value = true
+}
+
+/* Daten laden mit Infinite Scroll */
+const { data: config } = await useFetch("/api/config")
+
+const entries = ref([])
+const loading = ref(false)
+const finished = ref(false)
+
+async function reload() {
+  entries.value = []
+  finished.value = false
+  await loadMore()
+}
+
+const TAKE = 100
+
+async function loadMore() {
+  if (loading.value || finished.value) return
+  loading.value = true
+
+  const res = await $fetch('/api/entries', {
+    query: {
+      skip: entries.value.length,
+      take: TAKE
+    }
+  })
+
+  if (res.length < TAKE) finished.value = true
+  entries.value = [...entries.value, ...res]
+
+  loading.value = false
+}
+
+onMounted(loadMore)
+
+/* Gruppieren */
+const grouped = computed(() => {
+  const g = {}
+  if (!entries.value) return g
+
+  const sorted = [...entries.value].sort((a, b) => new Date(b.date) - new Date(a.date))
+
+  for (const e of sorted) {
+    const d = e.date.split("T")[0]
+    ;(g[d] ??= []).push(e)
+  }
+  return g
+})
+
+/* Helpers */
+function weekday(dateStr) {
+  return new Date(dateStr)
+    .toLocaleDateString("de-DE", { weekday: "long" })
+    .replace(/^\w/, c => c.toUpperCase())
+}
+function formatDate(d) { return new Date(d).toLocaleDateString("de-DE") }
+function time(dt) {
+  return new Date(dt).toLocaleTimeString("de-DE", {
+    hour: "2-digit",
+    minute: "2-digit"
+  })
+}
+function formatWeight(w) { return w == null ? "/" : Number(w).toFixed(1) }
+function openNote(i) { alert(i.note || "Keine Notiz") }
+
+/* Farben */
+function sugarBackground(v) {
+  if (v == null) return "transparent"
+  const low = config.value?.glucose.low ?? 80
+  const high = config.value?.glucose.high ?? 140
+  if (v < low * 0.5) return "#b33939"
+  if (v < low) return "#e1a32a"
+  if (v <= high) return "#3cb371"
+  if (v <= high * 1.5) return "#25a7d9"
+  return "#6a0dad"
+}
+
+/* Infinite scroll watcher */
+const sentinel = ref(null)
+onMounted(() => {
+  const obs = new IntersectionObserver(e => {
+    if (e[0].isIntersecting) loadMore()
+  })
+  obs.observe(sentinel.value)
+})
 </script>
 
 <style scoped>
+/* ——————————————————————
+   LAYOUT
+—————————————————————— */
+
 .page {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont;
   margin: 0;
-  padding-top: 0; /* Höhe des Headers */
+  padding-top: 0;
 }
 
+/* ⭐ Hamburger Menü */
+.side-menu {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1500;
+}
+.menu-panel {
+  width: 260px;
+  background: #fff;
+  height: 100%;
+  padding: 20px;
+}
+.menu-panel h2 {
+  margin: 0 0 14px 0;
+}
+.menu-panel button {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 10px;
+  font-size: 18px;
+  text-align: left;
+}
 
-/* Header */
+/* ⭐ Header */
 .top-header {
   height: 55px;
-  background: linear-gradient(180deg, #4a7cb2, #1e5f8b);
+  background: linear-gradient(180deg,#4a7cb2,#1e5f8b);
+  color: white;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 18px;
-  color: white;
   font-size: 22px;
   font-weight: 600;
-
   position: sticky;
   top: 0;
-  z-index: 999;
-  background-clip: padding-box; /* <-- neues Fix */
+  z-index: 1000;
 }
+.left-icons { cursor: pointer; }
 
-
+/* ⭐ Tagesblöcke */
 .day-block {
-  background: linear-gradient(90deg, #4a7cb2, #7fb7db);
+  background: linear-gradient(90deg,#4a7cb2,#7fb7db);
   padding-top: 6px;
 }
-
-/* Tageskopf */
 .day-header {
   display: flex;
   justify-content: space-between;
+  padding: 6px 14px;
   color: white;
-  padding: 6px 14px 8px;
+  cursor: pointer;
 }
-.day-title { font-size: 22px; font-weight: 600; }
-.day-date { font-size: 18px; font-weight: 600; }
+.day-title {
+  font-size: 22px;
+  font-weight: 600;
+}
+.day-date {
+  font-size: 18px;
+}
 
-/* Eintrag */
+/* ⭐ Eintrag */
 .entry {
-  display: grid;
-  grid-template-columns:
-    70px 90px 100px 60px 60px 60px 60px;
-  height: 58px;
-  align-items: center;
-  padding: 0 10px;
   background: white;
-  border-bottom: 1px solid #e5e5e5;
+  padding: 0 10px;
+  height: 58px;
+  display: grid;
+  grid-template-columns: 70px 90px 100px 60px 60px 60px 60px;
+  align-items: center;
+  border-bottom: 1px solid #ddd;
 }
-
-/* letzte Zeile ohne Linie */
 .entry.last {
-  border-bottom: none !important;
+  border-bottom: none;
 }
 
-/* Zeit */
-.col-time { font-size: 16px; font-weight: 500; }
+/* Spalten */
+.col-time {
+  font-size: 16px;
+  font-weight: 500;
+}
+.col {
+  text-align: center;
+}
+.main { font-size: 15px; font-weight: 500; }
+.unit { font-size: 10px; color:#777; margin-top: 5px; }
 
-/* Zucker */
+/* ⭐ Zuckerfeld */
 .col-sugar {
   height: 100%;
   display: flex;
@@ -300,70 +342,39 @@ function openDialogForNew() {
 .sugar-box {
   width: 100%;
   height: 100%;
-  color: white;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
 }
-.sugar-value {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-.sugar-unit {
-  font-size: 11px;
-}
+.sugar-value { font-size: 18px; font-weight: 600; }
+.sugar-unit { font-size: 11px; }
 
-/* Spalten */
-.col {
-  text-align: center;
-}
-.main {
-  font-size: 15px;
-  font-weight: 500;
-}
-.unit {
-  font-size: 10px;
-  margin-top: 6px;
-  color: #777;
-}
+/* ⭐ Notiz */
+.note-col { cursor: pointer; }
+.note-preview { white-space: nowrap; overflow: hidden; }
 
-/* Notiz */
-.note-col {
-  cursor: pointer;
-}
-.note-preview {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* Sentinel */
+.sentinel { height: 40px; }
 
-.sentinel {
-  height: 40px;
-}
-
-.add-button {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid white;
-  background: transparent;
+/* ⭐ Floating Action Button */
+.fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 54px;
+  height: 54px;
+  background: #1e5f8b;
   color: white;
-  font-size: 18px;
-  font-weight: 400;
+  border-radius: 50%;
+  border: none;
+  font-size: 32px;
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+  z-index: 2000;
   cursor: pointer;
-  padding: 0;
-  line-height: 0; /* sorgt dafür, dass das + perfekt mittig ist */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
 }
-
-.add-button:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-
-
+.fab-plus { transform: translateY(-2px); }
 </style>
