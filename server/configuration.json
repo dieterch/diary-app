@@ -1,0 +1,7 @@
+{
+  "glucose": {
+    "low": 80,
+    "target": 120,
+    "high": 140
+  }
+}
