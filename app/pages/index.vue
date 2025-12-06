@@ -5,7 +5,9 @@
     <div class="top-header">
       <div class="left-icons">☰</div>
       <div class="title">Tagebuch</div>
-      <div class="right-icons">⚙︎ ＋</div>
+      <div class="right-icons">
+        <button class="add-button" @click="openDialogForNew">+</button>
+      </div>
     </div>
 
     <!-- Tagesgruppen -->
@@ -22,6 +24,7 @@
         v-for="(item, idx) in group"
         :key="item.id"
         class="entry"
+        @click="editEntry(item)"
         :class="{ last: idx === group.length - 1 }"
       >
 
@@ -66,14 +69,14 @@
           <div class="unit">Sport</div>
         </div>
 
-        <!-- Medikamente -->
+        <!-- Medikamente 
         <div class="col">
           <div class="main">{{ item.insulinBolus ?? "/" }}</div>
           <div class="unit">Medikamente</div>
-        </div>
+        </div> -->
 
         <!-- Notiz -->
-        <div class="col note-col" @click="openNote(item)">
+        <div class="col note-col" @click.stop="openNote(item)">
           <div class="main note-preview">
             <!-- <span v-if="item.note">📝 Notiz…</span> -->
             <span v-if="item.note">📝</span>
@@ -81,27 +84,96 @@
           </div>
           <div class="unit">Notiz</div>
         </div>
-
       </div>
     </div>
-
+    <div ref="sentinel" class="sentinel"></div>
   </div>
+
+  <EntryDialog
+    v-model="dialogVisible"
+    :entry="selectedEntry"
+    @saved="reload"
+  />
+
+
 </template>
 
 <script setup>
-const { data: entries } = await useFetch("/api/entries")
-const { data: config } = await useFetch("/api/config")
+import EntryDialog from '~/components/EntryDialog.vue'
 
-// Gruppierung
+const dialogVisible = ref(false)
+const selectedEntry = ref(null)
+
+function editEntry(item) {
+  selectedEntry.value = { ...item }
+  dialogVisible.value = true
+}
+
+function addEntry() {
+  selectedEntry.value = null
+  dialogVisible.value = true
+}
+
+// function reload() {
+//   refreshNuxtData()   // lädt /api/entries neu
+// }
+
+const { data: config } = await useFetch("/api/config")
+  
+  
+  // const { data: entries } = await useFetch("/api/entries")
+  const entries = ref([])
+  const loading = ref(false)
+  const finished = ref(false)
+
+  async function reload() {
+    entries.value = []       // Liste zurücksetzen
+    finished.value = false   // infinite scroll wieder aktivieren
+    await loadMore()         // neu laden
+  }
+
+  const TAKE = 100
+
+  async function loadMore() {
+    if (loading.value || finished.value) return
+    loading.value = true
+
+    const skip = entries.value.length
+    const res = await $fetch('/api/entries', {
+      query: { skip, take: TAKE }
+    })
+
+    if (res.length < TAKE) {
+      finished.value = true
+    }
+
+    entries.value = [...entries.value, ...res]
+    loading.value = false
+  }
+
+  // Erste Ladung
+  onMounted(loadMore)
+
+  // Gruppierung basierend auf entries.value
 const grouped = computed(() => {
   const g = {}
   if (!entries.value) return g
-  for (const e of entries.value) {
+
+  // 1. Sortieren nach Datum + Zeit DESC
+  const sorted = [...entries.value].sort((a, b) => {
+    return new Date(b.date) - new Date(a.date)
+  })
+
+  // 2. Gruppieren
+  for (const e of sorted) {
     const d = e.date.split("T")[0]
     ;(g[d] ??= []).push(e)
   }
+
   return g
 })
+
+
 
 function weekday(dateStr) {
   return new Date(dateStr)
@@ -139,6 +211,23 @@ function sugarBackground(value) {
   if (value <= high * 1.5) return "#25a7d9"
   return "#6a0dad"
 }
+
+const sentinel = ref(null)
+
+onMounted(() => {
+  const observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+      loadMore()
+    }
+  })
+  observer.observe(sentinel.value)
+})
+
+function openDialogForNew() {
+  selectedEntry.value = null
+  dialogVisible.value = true
+}
+
 </script>
 
 <style scoped>
@@ -187,7 +276,7 @@ function sugarBackground(value) {
 .entry {
   display: grid;
   grid-template-columns:
-    70px 90px 100px 55px 55px 55px 100px 90px;
+    70px 90px 100px 60px 60px 60px 60px;
   height: 58px;
   align-items: center;
   padding: 0 10px;
@@ -249,4 +338,32 @@ function sugarBackground(value) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.sentinel {
+  height: 40px;
+}
+
+.add-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid white;
+  background: transparent;
+  color: white;
+  font-size: 18px;
+  font-weight: 400;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  padding: 0;
+  line-height: 0; /* sorgt dafür, dass das + perfekt mittig ist */
+}
+
+.add-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+
+
 </style>
