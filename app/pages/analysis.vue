@@ -8,9 +8,9 @@
       <div class="right-icons"></div>
     </div>
 
-    <!-- Zeitraum-Auswahl -->
+    <!-- Zeitraum -->
     <div class="filter-bar">
-      <select v-model="range" @change="updateFiltered">
+      <select v-model="range">
         <option value="7">Letzte Woche</option>
         <option value="14">Letzte 2 Wochen</option>
         <option value="30">Letzter Monat</option>
@@ -23,50 +23,77 @@
 
     <!-- Tabs -->
     <div class="tabs">
-      <button :class="{active: tab === 'line'}" @click="tab = 'line'">Liniengrafik</button>
-      <button :class="{active: tab === 'pie'}" @click="tab = 'pie'">Kuchengrafik</button>
-      <button :class="{active: tab === 'scatter'}" @click="tab = 'scatter'">Blutzuckerprofil</button>
+      <button :class="{active: tab==='pie'}" @click="changeTab('pie')">Kuchengrafik</button>
+      <button :class="{active: tab==='scatter'}" @click="changeTab('scatter')">Blutzuckerprofil</button>
     </div>
 
-    <!-- TAB-INHALTE -->
+    <!-- Inhalte -->
     <div class="content">
       
-      <!-- Liniengrafik -->
-      <div v-if="tab === 'line'" class="chart-container">
-        <canvas ref="lineCanvas"></canvas>
+      <!-- PIE -->
+      <div v-show="tab==='pie'" class="chart-container medium">
+        <canvas ref="pieRef"></canvas>
       </div>
 
-      <!-- Kuchengrafik -->
-      <div v-if="tab === 'pie'" class="chart-container">
-        <canvas ref="pieCanvas"></canvas>
-      </div>
-
-      <!-- Scatter-Profil -->
-      <div v-if="tab === 'scatter'" class="chart-container">
-        <canvas ref="scatterCanvas"></canvas>
+      <!-- SCATTER -->
+      <div v-show="tab==='scatter'" class="chart-container large">
+        <canvas ref="scatterRef"></canvas>
       </div>
 
     </div>
+
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from "vue"
+import { ref, watch, onMounted, nextTick } from "vue"
 
-// Daten vom Server
-const { data: entriesRaw } = await useFetch("/api/entries")
+// Chart.js
+import { Chart } from "chart.js/auto"
 
-const entries = ref([])
-const range = ref("30")   // Default = letzter Monat
-const tab = ref("line")
+let pieChart = null
+let scatterChart = null
 
-// Compute filtered entries by date
-function updateFiltered() {
-  if (!entriesRaw.value) return
+const pieRef = ref(null)
+const scatterRef = ref(null)
 
+const allEntries = ref([])
+const filtered = ref([])
+
+const range = ref("all")
+const tab = ref("pie")
+
+//
+//
+// 🔵 1) ALLE EINTRÄGE LADEN
+//
+async function loadAll() {
+  let out = []
+  let skip = 0
+  const TAKE = 300
+  let done = false
+
+  while (!done) {
+    const res = await $fetch("/api/entries", { query: { skip, take: TAKE } })
+    out.push(...res)
+    if (res.length < TAKE) done = true
+    skip += TAKE
+  }
+
+  // sortieren nach Datum
+  out.sort((a,b)=> new Date(a.date) - new Date(b.date))
+
+  allEntries.value = out
+  applyFilter()
+}
+
+//
+//
+// 🔵 2) Zeitraumfilter
+//
+function applyFilter() {
   if (range.value === "all") {
-    entries.value = entriesRaw.value
-    renderCharts()
+    filtered.value = [...allEntries.value]
     return
   }
 
@@ -74,186 +101,209 @@ function updateFiltered() {
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - days)
 
-  entries.value = entriesRaw.value.filter(e => {
-    return new Date(e.date) >= cutoff
-  })
+  filtered.value = allEntries.value.filter(e => new Date(e.date) >= cutoff)
+}
 
+//
+//
+// 🔵 3) Tabs wechseln
+//
+async function changeTab(t) {
+  tab.value = t
+  await nextTick()
   renderCharts()
 }
 
-// ---------- Chart.js ----------
-let lineChart = null
-let pieChart = null
-let scatterChart = null
-
-async function renderCharts() {
-  const { default: Chart } = await import("chart.js/auto")
-
-  const data = entries.value
-  const labels = data.map(e => new Date(e.date).toLocaleDateString("de-DE"))
-  const sugar = data.map(e => e.bloodSugar)
-
-  // ---- Linienchart ----
-  if (lineChart) lineChart.destroy()
-  lineChart = new Chart(lineCanvas.value.getContext("2d"), {
-    type: "line",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "Blutzucker",
-          data: sugar,
-          borderColor: "#1e78b2",
-          backgroundColor: "#1e78b244",
-          tension: 0.2
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-    }
-  })
-
-  // ---- Kuchenchart (Zonen) ----
-  const low = 80, high = 140, veryHigh = 210
-  const zones = {
-    low: sugar.filter(v => v < low).length,
-    mid: sugar.filter(v => v >= low && v <= high).length,
-    high: sugar.filter(v => v > high && v <= veryHigh).length,
-    veryHigh: sugar.filter(v => v > veryHigh).length
-  }
-
-  if (pieChart) pieChart.destroy()
-  pieChart = new Chart(pieCanvas.value.getContext("2d"), {
-    type: "pie",
-    data: {
-      labels: ["<80 mg/dl", "80–140 mg/dl", "141–210 mg/dl", ">210 mg/dl"],
-      datasets: [
-        {
-          data: [zones.low, zones.mid, zones.high, zones.veryHigh],
-          backgroundColor: ["#e67e22", "#2ecc71", "#3498db", "#8e44ad"]
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false
-    }
-  })
-
-  // ---- Scatter (24h Profil) ----
-  const scatterData = entries.value
-    .filter(e => e.bloodSugar != null)
-    .map(e => ({
-      x: new Date(e.date).getHours() + new Date(e.date).getMinutes() / 60,
-      y: e.bloodSugar
-    }))
-
-  if (scatterChart) scatterChart.destroy()
-  scatterChart = new Chart(scatterCanvas.value.getContext("2d"), {
-    type: "scatter",
-    data: {
-      datasets: [
-        {
-          label: "BZ",
-          data: scatterData,
-          borderColor: "#1e78b2",
-          backgroundColor: "#1e78b2"
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          min: 0,
-          max: 24,
-          ticks: {
-            callback: h => `${String(h).padStart(2, "0")}:00`
-          }
-        },
-        y: {
-          beginAtZero: true,
-          suggestedMax: 250
-        }
-      }
-    }
-  })
+//
+//
+// 🔵 4) Charts rendern
+//
+function destroyCharts() {
+  pieChart?.destroy()
+  scatterChart?.destroy()
 }
 
-// DOM refs
-const lineCanvas = ref(null)
-const pieCanvas = ref(null)
-const scatterCanvas = ref(null)
+async function renderCharts() {
+  destroyCharts()
 
-onMounted(() => {
-  updateFiltered()
+  const data = filtered.value
+  if (!data.length) return
+
+  //
+  // 🟢 PIE CHART
+  //
+  if (tab.value === "pie" && pieRef.value) {
+    const values = data
+      .map(e => e.bloodSugar)
+      .filter(v => v != null)
+
+    const total = values.length || 1
+
+    const counts = [
+      values.filter(v => v < 40).length,
+      values.filter(v => v >= 40 && v < 80).length,
+      values.filter(v => v >= 80 && v <= 140).length,
+      values.filter(v => v > 140 && v <= 210).length,
+      values.filter(v => v > 210).length
+    ]
+
+    const labels = [
+      "< 40 mg/dl",
+      "40–79 mg/dl",
+      "80–140 mg/dl",
+      "141–210 mg/dl",
+      "> 210 mg/dl"
+    ]
+
+    const percentLabels = labels.map((l,i) => {
+      const pct = ((counts[i] / total) * 100).toFixed(1)
+      return `${l} (${pct} %)`
+    })
+
+    pieChart = new Chart(pieRef.value, {
+      type: "pie",
+      data: {
+        labels: percentLabels,
+        datasets: [{
+          data: counts,
+          backgroundColor: [
+            "#d35400",
+            "#f39c12",
+            "#2ecc71",
+            "#3498db",
+            "#8e44ad"
+          ]
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { boxWidth: 18 }
+          }
+        }
+      }
+    })
+  }
+
+  //
+  // 🔵 SCATTER: 24h Profil
+  //
+  if (tab.value === "scatter" && scatterRef.value) {
+    const pts = data
+      .filter(e => e.bloodSugar != null)
+      .map(e => ({
+        x: new Date(e.date).getHours() + new Date(e.date).getMinutes() / 60,
+        y: e.bloodSugar,
+        originalDate: e.date
+      }))
+
+    scatterChart = new Chart(scatterRef.value, {
+      type: "scatter",
+      data: {
+        datasets: [{
+          label: "Blutzucker mg/dl",
+          data: pts,
+          backgroundColor: "#1e78b2",
+          pointRadius: 3
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label(ctx) {
+                const d = new Date(ctx.raw.originalDate)
+                const dt = d.toLocaleDateString("de-DE") + " " +
+                           d.toLocaleTimeString("de-DE", {hour:"2-digit", minute:"2-digit"})
+                return `${dt}: ${ctx.raw.y} mg/dl`
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            min: 0,
+            max: 24,
+            ticks: {
+              callback: h => `${String(h).padStart(2,"0")}:00`
+            }
+          },
+          y: {
+            min: 0,
+            max: Math.max(300, ...pts.map(p=>p.y))
+          }
+        }
+      }
+    })
+  }
+}
+
+//
+// 🔵 Watchers
+//
+watch(range, async () => {
+  applyFilter()
+  await nextTick()
+  renderCharts()
 })
 
-// new timeframe triggers rerender
-watch(range, updateFiltered)
-watch(tab, () => setTimeout(renderCharts, 50))
+//
+// 🔵 Init
+//
+onMounted(async () => {
+  await loadAll()
+  await nextTick()
+  renderCharts()
+})
 </script>
 
 <style scoped>
 .page {
-  padding-top: 55px;
-  font-family: -apple-system, BlinkMacSystemFont;
+  padding-top:55px;
 }
 
 .top-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 55px;
-  background: linear-gradient(180deg, #4a7cb2, #1e5f8b);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 18px;
-  z-index: 10;
-  font-size: 22px;
+  position:fixed;
+  top:0; left:0; right:0;
+  height:55px;
+  background:linear-gradient(180deg,#4a7cb2,#1e5f8b);
+  color:white;
+  padding:0 18px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  z-index:1000;
+  font-size:22px;
 }
 
 .filter-bar {
-  padding: 10px;
-  display: flex;
-  justify-content: center;
-}
-
-select {
-  padding: 6px 12px;
-  font-size: 16px;
-  border-radius: 6px;
+  text-align:center;
+  margin:12px;
 }
 
 .tabs {
-  display: flex;
-  justify-content: space-around;
-  margin-top: 10px;
+  display:flex;
 }
-
 .tabs button {
-  flex: 1;
-  padding: 12px;
-  border: none;
-  background: #d0dbe5;
-  font-size: 16px;
-  cursor: pointer;
+  flex:1;
+  padding:12px;
+  border:0;
+  background:#d0dbe5;
 }
-
 .tabs button.active {
-  background: #4a7cb2;
-  color: white;
+  background:#4a7cb2;
+  color:white;
 }
 
-.chart-container {
-  margin-top: 20px;
-  height: 380px;
-  padding: 10px;
+.chart-container.large {
+  height:720px;
+  padding:12px;
+}
+.chart-container.medium {
+  height:512px;
+  padding:12px;
 }
 </style>
