@@ -1,7 +1,9 @@
 {
   "glucose": {
+    "verylow": 40,
     "low": 80,
     "target": 120,
-    "high": 140
+    "high": 140,
+    "veryhigh": 210
   }
 }

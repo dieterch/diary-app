@@ -36,11 +36,29 @@
 <script setup>
 import { ref, computed, watch, nextTick } from "vue";
 
+// const props = defineProps({
+//   modelValue: { type: Boolean, default: false },
+//   date: { type: String, required: true },
+//   entries: { type: Array, default: () => [] }
+// });
+
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-  date: { type: String, required: true },
-  entries: { type: Array, default: () => [] }
+
+  // FIX: date darf null sein → Warnung verschwindet
+  date: {
+    type: String,
+    required: false,
+    default: null
+  },
+
+  entries: {
+    type: Array,
+    default: () => []
+  }
 });
+
+
 const emit = defineEmits(["update:modelValue"]);
 
 const show = ref(props.modelValue);

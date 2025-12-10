@@ -1,12 +1,12 @@
 <template>
   <div class="page">
-
     <!-- ⭐ Hamburger Menü Overlay -->
     <div v-if="menuOpen" class="side-menu" @click.self="menuOpen = false">
       <div class="menu-panel">
         <h2>Menü</h2>
         <button @click="goDiary">📘 Tagebuch</button>
         <button @click="goAnalysis">📊 Analyse</button>
+        <button @click="goStatistics">📈 Statistik</button>
       </div>
     </div>
 
@@ -18,12 +18,7 @@
     </div>
 
     <!-- ⭐ Tagesgruppen -->
-    <div
-      v-for="(group, date) in grouped"
-      :key="date"
-      class="day-block"
-    >
-
+    <div v-for="(group, date) in grouped" :key="date" class="day-block">
       <!-- Tageskopf → öffnet Tagesprofil -->
       <div class="day-header" @click="openDayProfile(date)">
         <div class="day-title">{{ weekday(date) }}</div>
@@ -47,17 +42,19 @@
             class="sugar-box"
             :style="{
               background: sugarBackground(item.bloodSugar),
-              color: item.bloodSugar == null ? '#000' : '#fff'
+              color: item.bloodSugar == null ? '#000' : '#fff',
             }"
           >
-            <div class="sugar-value">{{ item.bloodSugar ?? '-' }}</div>
+            <div class="sugar-value">{{ item.bloodSugar ?? "-" }}</div>
             <div class="sugar-unit">mg/dl</div>
           </div>
         </div>
 
         <!-- Blutdruck -->
         <div class="col">
-          <div class="main">{{ item.systolic ?? "/" }}/{{ item.diastolic ?? "/" }}</div>
+          <div class="main">
+            {{ item.systolic ?? "/" }}/{{ item.diastolic ?? "/" }}
+          </div>
           <div class="unit">mmHg</div>
         </div>
 
@@ -87,21 +84,15 @@
           </div>
           <div class="unit">Notiz</div>
         </div>
-
       </div>
     </div>
 
     <!-- Sentinel for Infinite Scroll -->
     <div ref="sentinel" class="sentinel"></div>
-
   </div>
 
   <!-- ⭐ Modal für Eintrag -->
-  <EntryDialog
-    v-model="dialogVisible"
-    :entry="selectedEntry"
-    @saved="reload"
-  />
+  <EntryDialog v-model="dialogVisible" :entry="selectedEntry" @saved="reload" />
 
   <!-- ⭐ Modal für Tagesprofil -->
   <DayProfileModal
@@ -114,127 +105,144 @@
   <button class="fab" @click="openDialogForNew">
     <span class="fab-plus">+</span>
   </button>
-
 </template>
 
 <script setup>
 /* Imports */
-import EntryDialog from '~/components/EntryDialog.vue'
-import DayProfileModal from '~/components/DayProfileModal.vue'
-const router = useRouter()
+import EntryDialog from "~/components/EntryDialog.vue";
+import DayProfileModal from "~/components/DayProfileModal.vue";
+const router = useRouter();
 
 /* Hamburger Menü */
-const menuOpen = ref(false)
-function goDiary() { router.push("/") }
-function goAnalysis() { router.push("/analysis") }
+const menuOpen = ref(false);
+function goDiary() {
+  router.push("/");
+}
+function goAnalysis() {
+  router.push("/analysis");
+}
+function goStatistics() {
+  menuOpen.value = false;
+  router.push("/statistics");
+}
 
 /* Dialog */
-const dialogVisible = ref(false)
-const selectedEntry = ref(null)
+const dialogVisible = ref(false);
+const selectedEntry = ref(null);
 
 function editEntry(item) {
-  selectedEntry.value = { ...item }
-  dialogVisible.value = true
+  selectedEntry.value = { ...item };
+  dialogVisible.value = true;
 }
 
 function openDialogForNew() {
-  selectedEntry.value = null
-  dialogVisible.value = true
+  selectedEntry.value = null;
+  dialogVisible.value = true;
 }
 
 /* Tagesprofil Modal */
-const showDayModal = ref(false)
-const modalDate = ref(null)
+const showDayModal = ref(false);
+const modalDate = ref(null);
 
 function openDayProfile(date) {
-  modalDate.value = date
-  showDayModal.value = true
+  modalDate.value = date;
+  showDayModal.value = true;
 }
 
 /* Daten laden mit Infinite Scroll */
-const { data: config } = await useFetch("/api/config")
+const { data: config } = await useFetch("/api/config");
 
-const entries = ref([])
-const loading = ref(false)
-const finished = ref(false)
+const entries = ref([]);
+const loading = ref(false);
+const finished = ref(false);
 
 async function reload() {
-  entries.value = []
-  finished.value = false
-  await loadMore()
+  entries.value = [];
+  finished.value = false;
+  await loadMore();
 }
 
-const TAKE = 100
+const TAKE = 100;
 
 async function loadMore() {
-  if (loading.value || finished.value) return
-  loading.value = true
+  if (loading.value || finished.value) return;
+  loading.value = true;
 
-  const res = await $fetch('/api/entries', {
+  const res = await $fetch("/api/entries", {
     query: {
       skip: entries.value.length,
-      take: TAKE
-    }
-  })
+      take: TAKE,
+    },
+  });
 
-  if (res.length < TAKE) finished.value = true
-  entries.value = [...entries.value, ...res]
+  if (res.length < TAKE) finished.value = true;
+  entries.value = [...entries.value, ...res];
 
-  loading.value = false
+  loading.value = false;
 }
 
-onMounted(loadMore)
+onMounted(loadMore);
 
 /* Gruppieren */
 const grouped = computed(() => {
-  const g = {}
-  if (!entries.value) return g
+  const g = {};
+  if (!entries.value) return g;
 
-  const sorted = [...entries.value].sort((a, b) => new Date(b.date) - new Date(a.date))
+  const sorted = [...entries.value].sort(
+    (a, b) => new Date(b.date) - new Date(a.date)
+  );
 
   for (const e of sorted) {
-    const d = e.date.split("T")[0]
-    ;(g[d] ??= []).push(e)
+    const d = e.date.split("T")[0];
+    (g[d] ??= []).push(e);
   }
-  return g
-})
+  return g;
+});
 
 /* Helpers */
 function weekday(dateStr) {
   return new Date(dateStr)
     .toLocaleDateString("de-DE", { weekday: "long" })
-    .replace(/^\w/, c => c.toUpperCase())
+    .replace(/^\w/, (c) => c.toUpperCase());
 }
-function formatDate(d) { return new Date(d).toLocaleDateString("de-DE") }
+function formatDate(d) {
+  return new Date(d).toLocaleDateString("de-DE");
+}
 function time(dt) {
   return new Date(dt).toLocaleTimeString("de-DE", {
     hour: "2-digit",
-    minute: "2-digit"
-  })
+    minute: "2-digit",
+  });
 }
-function formatWeight(w) { return w == null ? "/" : Number(w).toFixed(1) }
-function openNote(i) { alert(i.note || "Keine Notiz") }
+function formatWeight(w) {
+  return w == null ? "/" : Number(w).toFixed(1);
+}
+function openNote(i) {
+  alert(i.note || "Keine Notiz");
+}
 
 /* Farben */
 function sugarBackground(v) {
-  if (v == null) return "transparent"
-  const low = config.value?.glucose.low ?? 80
-  const high = config.value?.glucose.high ?? 140
-  if (v < low * 0.5) return "#b33939"
-  if (v < low) return "#e1a32a"
-  if (v <= high) return "#3cb371"
-  if (v <= high * 1.5) return "#25a7d9"
-  return "#6a0dad"
+  if (v == null) return "transparent";
+  const verylow = config.value?.glucose.verylow ?? 40;
+  const low = config.value?.glucose.low ?? 80;
+  const high = config.value?.glucose.high ?? 140;
+  const veryhigh = config.value?.glucose.veryhigh ?? 210;
+  if (v < verylow) return "#b33939";
+  if (v < low) return "#e1a32a";
+  if (v <= high) return "#3cb371";
+  if (v <= veryhigh) return "#25a7d9";
+  return "#6a0dad";
 }
 
 /* Infinite scroll watcher */
-const sentinel = ref(null)
+const sentinel = ref(null);
 onMounted(() => {
-  const obs = new IntersectionObserver(e => {
-    if (e[0].isIntersecting) loadMore()
-  })
-  obs.observe(sentinel.value)
-})
+  const obs = new IntersectionObserver((e) => {
+    if (e[0].isIntersecting) loadMore();
+  });
+  obs.observe(sentinel.value);
+});
 </script>
 
 <style scoped>
@@ -252,7 +260,7 @@ onMounted(() => {
 .side-menu {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.45);
+  background: rgba(0, 0, 0, 0.45);
   z-index: 1500;
 }
 .menu-panel {
@@ -275,7 +283,7 @@ onMounted(() => {
 /* ⭐ Header */
 .top-header {
   height: 55px;
-  background: linear-gradient(180deg,#4a7cb2,#1e5f8b);
+  background: linear-gradient(180deg, #4a7cb2, #1e5f8b);
   color: white;
   display: flex;
   align-items: center;
@@ -287,11 +295,13 @@ onMounted(() => {
   top: 0;
   z-index: 1000;
 }
-.left-icons { cursor: pointer; }
+.left-icons {
+  cursor: pointer;
+}
 
 /* ⭐ Tagesblöcke */
 .day-block {
-  background: linear-gradient(90deg,#4a7cb2,#7fb7db);
+  background: linear-gradient(90deg, #4a7cb2, #7fb7db);
   padding-top: 6px;
 }
 .day-header {
@@ -331,8 +341,15 @@ onMounted(() => {
 .col {
   text-align: center;
 }
-.main { font-size: 15px; font-weight: 500; }
-.unit { font-size: 10px; color:#777; margin-top: 5px; }
+.main {
+  font-size: 15px;
+  font-weight: 500;
+}
+.unit {
+  font-size: 10px;
+  color: #777;
+  margin-top: 5px;
+}
 
 /* ⭐ Zuckerfeld */
 .col-sugar {
@@ -347,15 +364,27 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
 }
-.sugar-value { font-size: 18px; font-weight: 600; }
-.sugar-unit { font-size: 11px; }
+.sugar-value {
+  font-size: 18px;
+  font-weight: 600;
+}
+.sugar-unit {
+  font-size: 11px;
+}
 
 /* ⭐ Notiz */
-.note-col { cursor: pointer; }
-.note-preview { white-space: nowrap; overflow: hidden; }
+.note-col {
+  cursor: pointer;
+}
+.note-preview {
+  white-space: nowrap;
+  overflow: hidden;
+}
 
 /* Sentinel */
-.sentinel { height: 40px; }
+.sentinel {
+  height: 40px;
+}
 
 /* ⭐ Floating Action Button */
 .fab {
@@ -374,7 +403,9 @@ onMounted(() => {
   justify-content: center;
   z-index: 2000;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
-.fab-plus { transform: translateY(-2px); }
+.fab-plus {
+  transform: translateY(-2px);
+}
 </style>
