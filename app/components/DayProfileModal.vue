@@ -357,4 +357,21 @@ function close() {
 .nowrap {
   white-space: nowrap;
 }
+
+@media (max-width: 700px) {
+  .modal-body {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto auto;
+  }
+
+  .chart-area {
+    height: 300px; /* reduced for phones */
+  }
+
+  .stats {
+    margin-top: 16px;
+  }
+}
+
+
 </style>

@@ -163,7 +163,7 @@ async function remove() {
 }
 .form input,
 .form textarea {
-  width: 100%;
+  width: 95%;
   margin-top: 4px;
   padding: 8px;
   border: 1px solid #ccc;

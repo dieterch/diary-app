@@ -325,7 +325,7 @@ onMounted(() => {
   padding: 0 10px;
   height: 58px;
   display: grid;
-  grid-template-columns: 70px 90px 100px 60px 60px 60px 60px;
+  grid-template-columns: 55px 70px 90px 50px 50px 50px 50px;
   align-items: center;
   border-bottom: 1px solid #ddd;
 }
