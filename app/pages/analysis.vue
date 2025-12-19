@@ -18,6 +18,8 @@
         <option value="365">Letztes Jahr</option>
         <option value="all">Alle Werte</option>
       </select>
+
+      <button class="export-btn" @click="exportExcel">Excel Export</button>
     </div>
 
     <!-- Tabs -->
@@ -49,6 +51,7 @@
 </template>
 
 <script setup>
+import * as XLSX from "xlsx";
 import { ref, onMounted, watch, nextTick } from "vue";
 import { Chart } from "chart.js/auto";
 
@@ -69,7 +72,11 @@ const scatterRef = ref(null);
 const allEntries = ref([]);
 const filtered = ref([]);
 
-const range = ref("all");
+const range = useCookie("analysis-range", {
+  default: () => "all",
+  sameSite: "lax",
+});
+
 const tab = ref("pie");
 
 /* -----------------------------
@@ -149,7 +156,7 @@ async function renderCharts() {
 
     const labels = [
       `< ${verylow} mg/dl`,
-      `${verylow}–${low-1} mg/dl`,
+      `${verylow}–${low - 1} mg/dl`,
       `${low}–${high} mg/dl`,
       `${high + 1}–${veryhigh} mg/dl`,
       `> ${veryhigh} mg/dl`,
@@ -275,6 +282,44 @@ async function renderCharts() {
   }
 }
 
+function exportExcel() {
+  if (!filtered.value.length) return;
+
+  const rows = filtered.value.map((e) => {
+    const d = new Date(e.date);
+
+    return {
+      Zeitpunkt: d,
+      Blutzucker: e.bloodSugar ?? null,
+      Gewicht: e.weight ?? null,
+      Systolisch: e.bloodPressureSys ?? null,
+      Diastolisch: e.bloodPressureDia ?? null,
+      Puls: e.pulse ?? null,
+      Sport: e.sport ?? null,
+      BE: e.carbs ?? null,
+      Notiz: e.note ?? null,
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+
+  for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+    const cell = ws[XLSX.utils.encode_cell({ r: R, c: 0 })]; // Spalte A
+    if (cell && cell.t === "d") {
+      cell.z = "dd.mm.yyyy hh:mm";
+    }
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(wb, ws, "Analyse");
+
+  const label = range.value === "all" ? "alle" : `letzte_${range.value}_tage`;
+
+  XLSX.writeFile(wb, `diaconnect_analyse_${label}.xlsx`);
+}
+
 /* -----------------------------
    5) WATCH & INIT
 ----------------------------- */
@@ -312,11 +357,6 @@ onMounted(async () => {
   font-size: 22px;
 }
 
-.filter-bar {
-  text-align: center;
-  margin: 12px;
-}
-
 .tabs {
   display: flex;
 }
@@ -342,5 +382,21 @@ onMounted(async () => {
 }
 .chart-container.large {
   height: 420px;
+}
+
+.filter-bar {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 12px;
+}
+
+.export-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 0;
+  background: #4a7cb2;
+  color: white;
+  font-size: 14px;
 }
 </style>
