@@ -75,6 +75,13 @@ function toLocalInput(dt) {
   return localISO
 }
 
+function localInputToUTC(localStr) {
+  // localStr: "2025-02-03T10:30"
+  const d = new Date(localStr)
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString()
+}
+
+
 watch(() => props.entry, (v) => {
   if (v) {
     Object.assign(local, {
@@ -107,6 +114,7 @@ function close() {
   emit("update:modelValue", false)
 }
 
+/* +1h Bug !!!!
 async function save() {
   const url = isNew.value ? "/api/entries/add" : "/api/entries/update"
 
@@ -117,7 +125,26 @@ async function save() {
 
   emit("saved")
   close()
+} */
+
+async function save() {
+  const url = isNew.value ? "/api/entries/add" : "/api/entries/update"
+
+  const payload = {
+    ...local,
+    date: localInputToUTC(local.date), // ⭐ FIX
+  }
+
+  await $fetch(url, {
+    method: isNew.value ? "POST" : "PUT",
+    body: payload
+  })
+
+  emit("saved")
+  close()
 }
+
+
 
 async function remove() {
   if (!confirm("Wirklich löschen?")) return
