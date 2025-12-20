@@ -66,21 +66,42 @@ const isNew = computed(() => !props.entry?.id)
 
 const local = reactive({})
 
-/* ⭐ FIX: Datum korrekt übernehmen */
+/* ⭐ FIX: Datum korrekt übernehmen 
 function toLocalInput(dt) {
   const d = new Date(dt)
   const localISO = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
     .toISOString()
     .slice(0, 16)
   return localISO
+} 
+
+function toLocalInput(dt) {
+  return new Date(dt).toISOString().slice(0, 16)
+}. */
+
+function toLocalInput(utc) {
+  const d = new Date(utc)
+  const pad = (n) => String(n).padStart(2, "0")
+
+  return (
+    d.getFullYear() + "-" +
+    pad(d.getMonth() + 1) + "-" +
+    pad(d.getDate()) + "T" +
+    pad(d.getHours()) + ":" +
+    pad(d.getMinutes())
+  )
 }
 
+/*
 function localInputToUTC(localStr) {
   // localStr: "2025-02-03T10:30"
   const d = new Date(localStr)
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString()
-}
+} */
 
+function localInputToUTC(localStr) {
+  return new Date(localStr).toISOString()
+}
 
 watch(() => props.entry, (v) => {
   if (v) {
