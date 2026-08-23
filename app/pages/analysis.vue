@@ -292,10 +292,10 @@ function exportExcel() {
       Zeitpunkt: d,
       Blutzucker: e.bloodSugar ?? null,
       Gewicht: e.weight ?? null,
-      Systolisch: e.bloodPressureSys ?? null,
-      Diastolisch: e.bloodPressureDia ?? null,
+      Systolisch: e.systolic ?? null,
+      Diastolisch: e.diastolic ?? null,
       Puls: e.pulse ?? null,
-      Sport: e.sport ?? null,
+      Sport: e.sportMinutes ?? null,
       BE: e.carbs ?? null,
       Notiz: e.note ?? null,
     };
