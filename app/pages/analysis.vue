@@ -285,11 +285,14 @@ async function renderCharts() {
 function exportExcel() {
   if (!filtered.value.length) return;
 
-  const rows = filtered.value.map((e) => {
+  const rows = [...filtered.value]
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .map((e) => {
     const d = new Date(e.date);
 
     return {
       Zeitpunkt: d,
+      Uhrzeit: d,
       Blutzucker: e.bloodSugar ?? null,
       Gewicht: e.weight ?? null,
       Systolisch: e.systolic ?? null,
@@ -305,9 +308,14 @@ function exportExcel() {
   const range = XLSX.utils.decode_range(ws["!ref"]);
 
   for (let R = range.s.r + 1; R <= range.e.r; ++R) {
-    const cell = ws[XLSX.utils.encode_cell({ r: R, c: 0 })]; // Spalte A
-    if (cell && cell.t === "d") {
-      cell.z = "dd.mm.yyyy hh:mm";
+    const dateCell = ws[XLSX.utils.encode_cell({ r: R, c: 0 })]; // Spalte A
+    if (dateCell && dateCell.t === "d") {
+      dateCell.z = "dd.mm.yyyy hh:mm";
+    }
+
+    const timeCell = ws[XLSX.utils.encode_cell({ r: R, c: 1 })]; // Spalte B
+    if (timeCell && timeCell.t === "d") {
+      timeCell.z = "hh:mm";
     }
   }
 
