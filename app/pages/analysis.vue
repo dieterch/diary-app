@@ -289,10 +289,11 @@ function exportExcel() {
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .map((e) => {
     const d = new Date(e.date);
+    const secondsOfDay = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
 
     return {
       Zeitpunkt: d,
-      Uhrzeit: d,
+      Uhrzeit: secondsOfDay / 86400,
       Blutzucker: e.bloodSugar ?? null,
       Gewicht: e.weight ?? null,
       Systolisch: e.systolic ?? null,
@@ -314,7 +315,7 @@ function exportExcel() {
     }
 
     const timeCell = ws[XLSX.utils.encode_cell({ r: R, c: 1 })]; // Spalte B
-    if (timeCell && timeCell.t === "d") {
+    if (timeCell) {
       timeCell.z = "hh:mm";
     }
   }
