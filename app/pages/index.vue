@@ -16,7 +16,7 @@
       <div class="period-nav">
         <button class="nav-btn" :disabled="!canGoNewer" title="Neuere Periode" @click="goNewer">‹</button>
         <button class="now-btn" :disabled="isAtNow" title="Zur aktuellen Periode" @click="goNow">Heute</button>
-        <div class="title">{{ currentPeriod?.label ?? "Tagebuch" }}</div>
+        <div class="title">{{ currentTitle }}</div>
         <button class="nav-btn" :disabled="!canGoOlder" title="Ältere Periode" @click="goOlder">›</button>
       </div>
       <div class="level-switch">
@@ -33,11 +33,11 @@
     </div>
 
     <div v-if="loading && !entries.length" class="empty-state">Lade Daten...</div>
-    <div v-else-if="!currentPeriod" class="empty-state">Keine Einträge</div>
+    <div v-else-if="!visibleDays.length" class="empty-state">Keine Einträge</div>
 
     <template v-else>
       <div
-        v-if="viewLevel !== 'day'"
+        v-if="!isContinuous"
         class="period-header"
         @click="togglePeriod(currentPeriod.key)"
       >
@@ -52,8 +52,14 @@
         </div>
       </div>
 
-      <template v-if="viewLevel === 'day' || isPeriodExpanded(currentPeriod.key)">
-        <div v-for="day in currentPeriod.days" :key="day.date" class="day-block">
+      <template v-if="isContinuous || isPeriodExpanded(currentPeriod.key)">
+        <div
+          v-for="day in visibleDays"
+          :key="day.date"
+          :ref="(el) => setDayRef(el, day.date)"
+          class="day-block"
+          :data-day="day.date"
+        >
           <!-- Tageskopf → öffnet Tagesprofil -->
           <div class="day-header" @click="openDayProfile(day.date)">
             <div class="day-title">{{ weekday(day.date) }}</div>
@@ -192,16 +198,20 @@ const currentPeriodIndex = ref(0);
 const expandedPeriods = ref(new Set());
 
 const viewLevels = [
-  { value: "day", label: "D", title: "Tag" },
+  { value: "continuous", label: "C", title: "Fortlaufend" },
   { value: "week", label: "W", title: "Woche" },
   { value: "month", label: "M", title: "Monat" },
   { value: "year", label: "Y", title: "Jahr" },
 ];
 
 const viewLevel = useCookie("diary-view-level", {
-  default: () => "day",
+  default: () => "continuous",
   sameSite: "lax",
 });
+
+if (viewLevel.value === "day") {
+  viewLevel.value = "continuous";
+}
 
 async function reload() {
   entries.value = [];
@@ -230,6 +240,7 @@ async function loadAll() {
 
   entries.value = out;
   currentPeriodIndex.value = Math.min(currentPeriodIndex.value, Math.max(periods.value.length - 1, 0));
+  updateVisibleDayObserver();
 
   loading.value = false;
 }
@@ -237,7 +248,11 @@ async function loadAll() {
 onMounted(loadAll);
 
 /* Gruppieren */
+const allDays = computed(() => groupDays(entries.value));
+
 const periods = computed(() => {
+  if (isContinuous.value) return [];
+
   const byPeriod = new Map();
 
   const sorted = [...entries.value].sort(
@@ -260,13 +275,26 @@ const periods = computed(() => {
 });
 
 const currentPeriod = computed(() => periods.value[currentPeriodIndex.value] ?? null);
-const canGoNewer = computed(() => currentPeriodIndex.value > 0);
-const canGoOlder = computed(() => currentPeriodIndex.value < periods.value.length - 1);
-const isAtNow = computed(() => currentPeriodIndex.value === 0);
+const isContinuous = computed(() => viewLevel.value === "continuous");
+const visibleDays = computed(() => isContinuous.value ? allDays.value : currentPeriod.value?.days ?? []);
+const currentTitle = computed(() => {
+  if (isContinuous.value) {
+    return visibleAnchorDate.value ? formatDate(visibleAnchorDate.value) : "Tagebuch";
+  }
+  return currentPeriod.value?.label ?? "Tagebuch";
+});
+const canGoNewer = computed(() => !isContinuous.value && currentPeriodIndex.value > 0);
+const canGoOlder = computed(() => !isContinuous.value && currentPeriodIndex.value < periods.value.length - 1);
+const isAtNow = computed(() => isContinuous.value ? visibleAnchorDate.value === allDays.value[0]?.date : currentPeriodIndex.value === 0);
+const visibleAnchorDate = ref(null);
+const dayElements = new Map();
+let visibleDayObserver = null;
 
 watch(viewLevel, () => {
-  currentPeriodIndex.value = 0;
-  expandedPeriods.value = new Set();
+  if (!viewLevels.some((level) => level.value === viewLevel.value)) {
+    viewLevel.value = "continuous";
+  }
+  updateVisibleDayObserver();
 });
 
 watch(periods, (next) => {
@@ -275,8 +303,28 @@ watch(periods, (next) => {
   }
 });
 
-function setViewLevel(level) {
+watch(visibleDays, async () => {
+  await nextTick();
+  updateVisibleDayObserver();
+});
+
+onBeforeUnmount(() => {
+  visibleDayObserver?.disconnect();
+});
+
+async function setViewLevel(level) {
+  const anchorDate = currentAnchorDate();
   viewLevel.value = level;
+
+  await nextTick();
+
+  if (level === "continuous") {
+    scrollToDay(anchorDate);
+    return;
+  }
+
+  currentPeriodIndex.value = periodIndexForDate(anchorDate);
+  expandedPeriods.value = new Set();
 }
 
 function goNewer() {
@@ -288,6 +336,10 @@ function goOlder() {
 }
 
 function goNow() {
+  if (isContinuous.value) {
+    scrollToDay(allDays.value[0]?.date);
+    return;
+  }
   currentPeriodIndex.value = 0;
 }
 
@@ -303,11 +355,68 @@ function togglePeriod(key) {
 }
 
 /* Helpers */
+function currentAnchorDate() {
+  if (isContinuous.value) return visibleAnchorDate.value ?? allDays.value[0]?.date ?? null;
+  return currentPeriod.value?.anchorDate ?? allDays.value[0]?.date ?? null;
+}
+
+function periodIndexForDate(dateKey) {
+  if (!dateKey) return 0;
+  const index = periods.value.findIndex((period) =>
+    period.days.some((day) => day.date === dateKey)
+  );
+  return index === -1 ? 0 : index;
+}
+
+function setDayRef(el, date) {
+  if (!import.meta.client) return;
+  if (el) dayElements.set(date, el);
+  else dayElements.delete(date);
+}
+
+function scrollToDay(dateKey) {
+  if (!import.meta.client || !dateKey) return;
+  visibleAnchorDate.value = dateKey;
+  requestAnimationFrame(() => {
+    dayElements.get(dateKey)?.scrollIntoView({ block: "start" });
+  });
+}
+
+function updateVisibleDayObserver() {
+  if (!import.meta.client || !isContinuous.value) {
+    visibleDayObserver?.disconnect();
+    visibleDayObserver = null;
+    return;
+  }
+
+  visibleDayObserver?.disconnect();
+  visibleDayObserver = new IntersectionObserver(
+    (items) => {
+      const visible = items
+        .filter((item) => item.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+
+      if (visible[0]?.target?.dataset?.day) {
+        visibleAnchorDate.value = visible[0].target.dataset.day;
+      }
+    },
+    {
+      root: null,
+      rootMargin: "-62px 0px -70% 0px",
+      threshold: 0,
+    }
+  );
+
+  dayElements.forEach((el) => visibleDayObserver.observe(el));
+
+  if (!visibleAnchorDate.value && allDays.value[0]?.date) {
+    visibleAnchorDate.value = allDays.value[0].date;
+  }
+}
+
 function periodKey(entry, level) {
   const date = new Date(entry.date);
-  const day = entry.date.split("T")[0];
 
-  if (level === "day") return day;
   if (level === "week") return isoWeekKey(date);
   if (level === "month") return `${date.getFullYear()}-${pad(date.getMonth() + 1)}`;
   return String(date.getFullYear());
@@ -327,6 +436,7 @@ function buildPeriod(key, periodEntries) {
     label: periodLabel(key, first, last),
     rangeLabel: rangeLabel(first, last),
     avgBloodSugar: averageBloodSugar(sorted),
+    anchorDate: toDateKey(last),
     sortTime: last.getTime(),
   };
 }
@@ -348,7 +458,6 @@ function groupDays(list) {
 }
 
 function periodLabel(key, first, last) {
-  if (viewLevel.value === "day") return formatDate(key);
   if (viewLevel.value === "week") {
     const [, year, week] = key.match(/^(\d{4})-W(\d{2})$/) ?? [];
     return `KW ${Number(week)} / ${year}`;
