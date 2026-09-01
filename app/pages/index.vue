@@ -15,6 +15,7 @@
       <div class="left-icons" @click="menuOpen = !menuOpen">☰</div>
       <div class="period-nav">
         <button class="nav-btn" :disabled="!canGoNewer" title="Neuere Periode" @click="goNewer">‹</button>
+        <button class="now-btn" :disabled="isAtNow" title="Zur aktuellen Periode" @click="goNow">Heute</button>
         <div class="title">{{ currentPeriod?.label ?? "Tagebuch" }}</div>
         <button class="nav-btn" :disabled="!canGoOlder" title="Ältere Periode" @click="goOlder">›</button>
       </div>
@@ -261,6 +262,7 @@ const periods = computed(() => {
 const currentPeriod = computed(() => periods.value[currentPeriodIndex.value] ?? null);
 const canGoNewer = computed(() => currentPeriodIndex.value > 0);
 const canGoOlder = computed(() => currentPeriodIndex.value < periods.value.length - 1);
+const isAtNow = computed(() => currentPeriodIndex.value === 0);
 
 watch(viewLevel, () => {
   currentPeriodIndex.value = 0;
@@ -283,6 +285,10 @@ function goNewer() {
 
 function goOlder() {
   if (canGoOlder.value) currentPeriodIndex.value++;
+}
+
+function goNow() {
+  currentPeriodIndex.value = 0;
 }
 
 function isPeriodExpanded(key) {
@@ -476,7 +482,7 @@ function sugarBackground(v) {
 .period-nav {
   min-width: 0;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  grid-template-columns: 32px 54px minmax(0, 1fr) 32px;
   gap: 4px;
   align-items: center;
 }
@@ -501,6 +507,20 @@ function sugarBackground(v) {
 }
 .nav-btn:disabled {
   opacity: 0.35;
+  cursor: default;
+}
+.now-btn {
+  height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.now-btn:disabled {
+  opacity: 0.5;
   cursor: default;
 }
 .level-switch {
@@ -671,7 +691,7 @@ function sugarBackground(v) {
     padding: 6px;
   }
   .period-nav {
-    grid-template-columns: 28px minmax(0, 1fr) 28px;
+    grid-template-columns: 28px 42px minmax(0, 1fr) 28px;
   }
   .title {
     font-size: 15px;
@@ -680,6 +700,10 @@ function sugarBackground(v) {
     width: 28px;
     height: 30px;
     font-size: 22px;
+  }
+  .now-btn {
+    height: 30px;
+    font-size: 10px;
   }
   .level-switch {
     grid-template-columns: repeat(4, 24px);
