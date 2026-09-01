@@ -15,6 +15,7 @@ const DEFAULT_COLORS = {
 };
 
 const BAND_KEYS = ["verylow", "low", "target", "high", "veryhigh"];
+const THRESHOLD_KEYS = ["verylow", "low", "high", "veryhigh"];
 
 function isHexColor(value) {
   return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
@@ -25,6 +26,28 @@ function normalizeColors(colors = {}) {
     out[key] = isHexColor(colors[key]) ? colors[key] : DEFAULT_COLORS[key];
     return out;
   }, {});
+}
+
+function normalizeThresholds(thresholds = {}) {
+  const parsed = THRESHOLD_KEYS.reduce((out, key) => {
+    out[key] = Number.isFinite(Number(thresholds[key]))
+      ? Math.round(Number(thresholds[key]))
+      : DEFAULT_THRESHOLDS[key];
+    return out;
+  }, {});
+
+  parsed.verylow = Math.max(1, Math.min(parsed.verylow, 998));
+  parsed.low = Math.max(parsed.verylow + 1, Math.min(parsed.low, 999));
+  parsed.high = Math.max(parsed.low, Math.min(parsed.high, 1000));
+  parsed.veryhigh = Math.max(parsed.high + 1, Math.min(parsed.veryhigh, 1001));
+
+  return {
+    verylow: parsed.verylow,
+    low: parsed.low,
+    target: Math.round((parsed.low + parsed.high) / 2),
+    high: parsed.high,
+    veryhigh: parsed.veryhigh,
+  };
 }
 
 function hexToRgba(hex, alpha) {
@@ -41,10 +64,16 @@ export function useGlucoseBands(config = ref(null)) {
     sameSite: "lax",
     watch: true,
   });
+  const storedThresholds = useCookie("glucose-band-thresholds", {
+    default: () => ({}),
+    sameSite: "lax",
+    watch: true,
+  });
 
-  const thresholds = computed(() => ({
+  const thresholds = computed(() => normalizeThresholds({
     ...DEFAULT_THRESHOLDS,
     ...(config.value?.glucose ?? {}),
+    ...(storedThresholds.value ?? {}),
   }));
 
   const bandColors = computed(() => normalizeColors({
@@ -78,14 +107,26 @@ export function useGlucoseBands(config = ref(null)) {
     storedColors.value = {};
   }
 
+  function saveThresholds(thresholds) {
+    storedThresholds.value = normalizeThresholds(thresholds);
+  }
+
+  function resetThresholds() {
+    storedThresholds.value = {};
+  }
+
   return {
     bandKeys: BAND_KEYS,
+    thresholdKeys: THRESHOLD_KEYS,
     defaultColors: DEFAULT_COLORS,
+    defaultThresholds: DEFAULT_THRESHOLDS,
     thresholds,
     bandColors,
     colorForGlucose,
     bandFill,
     saveColors,
     resetColors,
+    saveThresholds,
+    resetThresholds,
   };
 }
