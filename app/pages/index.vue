@@ -39,7 +39,7 @@
       <div
         v-if="!isContinuous"
         class="period-header"
-        @click="togglePeriod(currentPeriod.key)"
+        @click="openPeriodProfile(currentPeriod)"
       >
         <div>
           <div class="period-title">{{ currentPeriod.label }}</div>
@@ -48,11 +48,10 @@
         <div class="period-summary">
           <span>{{ currentPeriod.entries.length }} Werte</span>
           <span>Ø {{ currentPeriod.avgBloodSugar }}</span>
-          <span>{{ isPeriodExpanded(currentPeriod.key) ? "−" : "+" }}</span>
         </div>
       </div>
 
-      <template v-if="isContinuous || isPeriodExpanded(currentPeriod.key)">
+      <template v-if="isContinuous || currentPeriod">
         <div
           v-for="day in visibleDays"
           :key="day.date"
@@ -138,7 +137,9 @@
   <DayProfileModal
     v-model="showDayModal"
     :date="modalDate"
-    :entries="entries"
+    :title="profileTitle"
+    :range-label="profileRangeLabel"
+    :entries="profileEntries"
   />
 
   <!-- ⭐ Floating Action Button -->
@@ -183,9 +184,23 @@ function openDialogForNew() {
 /* Tagesprofil Modal */
 const showDayModal = ref(false);
 const modalDate = ref(null);
+const profileTitle = ref("");
+const profileRangeLabel = ref("");
+const profileEntries = ref([]);
 
 function openDayProfile(date) {
   modalDate.value = date;
+  profileTitle.value = formatDate(date);
+  profileRangeLabel.value = "";
+  profileEntries.value = entries.value.filter((entry) => entry.date?.split("T")[0] === date);
+  showDayModal.value = true;
+}
+
+function openPeriodProfile(period) {
+  modalDate.value = null;
+  profileTitle.value = period.label;
+  profileRangeLabel.value = period.rangeLabel;
+  profileEntries.value = period.entries;
   showDayModal.value = true;
 }
 
@@ -195,7 +210,6 @@ const { data: config } = await useFetch("/api/config");
 const entries = ref([]);
 const loading = ref(false);
 const currentPeriodIndex = ref(0);
-const expandedPeriods = ref(new Set());
 
 const viewLevels = [
   { value: "continuous", label: "C", title: "Fortlaufend" },
@@ -324,7 +338,6 @@ async function setViewLevel(level) {
   }
 
   currentPeriodIndex.value = periodIndexForDate(anchorDate);
-  expandedPeriods.value = new Set();
 }
 
 function goNewer() {
@@ -341,17 +354,6 @@ function goNow() {
     return;
   }
   currentPeriodIndex.value = 0;
-}
-
-function isPeriodExpanded(key) {
-  return !expandedPeriods.value.has(key);
-}
-
-function togglePeriod(key) {
-  const next = new Set(expandedPeriods.value);
-  if (next.has(key)) next.delete(key);
-  else next.add(key);
-  expandedPeriods.value = next;
 }
 
 /* Helpers */

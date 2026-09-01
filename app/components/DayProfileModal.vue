@@ -17,7 +17,9 @@
 
           <div class="stats">
             <h3>Statistik</h3>
+            <div v-if="rangeLabel" class="range-label">{{ rangeLabel }}</div>
             <dl>
+              <div><dt>Messwerte:</dt><dd class="nowrap">{{ countValue }}</dd></div>
               <div><dt>Ø Blutzucker:</dt><dd class="nowrap">{{ meanValue }} mg/dl</dd></div>
               <div><dt>Blutzucker-Abweichung:</dt><dd class="nowrap">±{{ stdValue }} mg/dl</dd></div>
               <div><dt>Höchster Blutzucker:</dt><dd class="nowrap">{{ maxValue }} mg/dl</dd></div>
@@ -36,16 +38,16 @@
 <script setup>
 import { ref, computed, watch, nextTick } from "vue";
 
-// const props = defineProps({
-//   modelValue: { type: Boolean, default: false },
-//   date: { type: String, required: true },
-//   entries: { type: Array, default: () => [] }
-// });
-
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-
-  // FIX: date darf null sein → Warnung verschwindet
+  title: {
+    type: String,
+    default: null
+  },
+  rangeLabel: {
+    type: String,
+    default: ""
+  },
   date: {
     type: String,
     required: false,
@@ -71,16 +73,21 @@ watch(
 watch(show, v => emit("update:modelValue", v));
 
 const title = computed(() => {
+  if (props.title) return props.title;
+  if (!props.date) return "Profil";
+
   const d = new Date(props.date);
   return d.toLocaleDateString("de-DE");
 });
 
-// filter entries for the day and sort by time ascending
-function dayEntries() {
-  return props.entries
-    .filter(e => e.date.split("T")[0] === props.date)
+const profileEntries = computed(() => {
+  const source = props.date
+    ? props.entries.filter(e => e.date.split("T")[0] === props.date)
+    : props.entries;
+
+  return [...source]
     .sort((a, b) => new Date(a.date) - new Date(b.date));
-}
+});
 
 // utility: convert datetime -> decimal hours (0..24)
 function toHourDecimal(isoDatetime) {
@@ -92,7 +99,7 @@ function toHourDecimal(isoDatetime) {
 function stats(list) {
   const vals = list.map(x => Number(x.bloodSugar)).filter(v => !isNaN(v));
   if (vals.length === 0) {
-    return { mean: "-", std: "-", max: "-", min: "-", totalBE: 0 };
+    return { count: 0, mean: "-", std: "-", max: "-", min: "-", totalBE: 0 };
   }
   const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
   const variance =
@@ -106,6 +113,7 @@ function stats(list) {
     list.reduce((s, e) => s + (Number(e.carbs || 0) / 12 || 0), 0) || 0;
 
   return {
+    count: vals.length,
     mean: mean.toFixed(1),
     std: std.toFixed(1),
     max: max.toFixed(1),
@@ -114,12 +122,14 @@ function stats(list) {
   };
 }
 
-const computedStats = computed(() => stats(dayEntries()));
+const computedStats = computed(() => stats(profileEntries.value));
+const countValue = computed(() => computedStats.value.count);
 const meanValue = computed(() => computedStats.value.mean);
 const stdValue = computed(() => computedStats.value.std);
 const maxValue = computed(() => computedStats.value.max);
 const minValue = computed(() => computedStats.value.min);
 const totalBE = computed(() => computedStats.value.totalBE);
+const isMultiDayProfile = computed(() => new Set(profileEntries.value.map(e => e.date.split("T")[0])).size > 1);
 
 const canvas = ref(null);
 let chart = null;
@@ -138,7 +148,7 @@ async function renderChart() {
 
   if (!canvas.value) return;
 
-  const list = dayEntries();
+  const list = profileEntries.value;
   // destroy previous chart to avoid issues
   if (chart) {
     try { chart.destroy(); } catch(e){}
@@ -189,7 +199,7 @@ async function renderChart() {
 
   const ctx = canvas.value.getContext("2d");
   chart = new Chart(ctx, {
-    type: "line",
+    type: isMultiDayProfile.value ? "scatter" : "line",
     data: {
       datasets: [
         {
@@ -202,6 +212,7 @@ async function renderChart() {
           pointBackgroundColor: "#fff",
           pointBorderColor: "#1e78b2",
           fill: false,
+          showLine: !isMultiDayProfile.value,
           parsing: false // we pass x/y directly
         }
       ]
@@ -216,9 +227,12 @@ async function renderChart() {
             title: (items) => {
               // items[0].raw is our point; we can show time nicely
               const p = items[0].raw;
+              const d = new Date(p.raw.date);
               const h = Math.floor(p.x);
               const m = Math.round((p.x - h) * 60);
-              return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+              const time = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+              if (!isMultiDayProfile.value) return time;
+              return `${d.toLocaleDateString("de-DE")} ${time}`;
             },
             label: (ctx) => {
               return `${ctx.parsed.y} mg/dl`;
@@ -277,6 +291,13 @@ watch(
 
 watch(
   () => props.date,
+  () => {
+    if (show.value) renderChart();
+  }
+);
+
+watch(
+  () => props.title,
   () => {
     if (show.value) renderChart();
   }
@@ -347,6 +368,11 @@ function close() {
 .stats h3 {
   margin-top: 0;
   font-size: 20px;
+}
+.range-label {
+  color: #666;
+  font-size: 13px;
+  margin: -6px 0 12px 0;
 }
 .stats dl div {
   display: flex;
