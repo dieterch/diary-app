@@ -14,10 +14,10 @@
     <div class="top-header">
       <div class="left-icons" @click="menuOpen = !menuOpen">☰</div>
       <div class="period-nav">
-        <button class="nav-btn" :disabled="!canGoNewer" title="Neuere Periode" @click="goNewer">‹</button>
+        <button class="nav-btn" :disabled="!canGoOlder" title="Ältere Periode" @click="goOlder">‹</button>
         <button class="now-btn" :disabled="isAtNow" title="Zur aktuellen Periode" @click="goNow">Heute</button>
         <div class="title">{{ currentTitle }}</div>
-        <button class="nav-btn" :disabled="!canGoOlder" title="Ältere Periode" @click="goOlder">›</button>
+        <button class="nav-btn" :disabled="!canGoNewer" title="Neuere Periode" @click="goNewer">›</button>
       </div>
       <div class="level-switch">
         <button
