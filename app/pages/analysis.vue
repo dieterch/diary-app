@@ -52,16 +52,16 @@
 
 <script setup>
 import * as XLSX from "xlsx";
-import { ref, onMounted, watch, nextTick } from "vue";
+import { ref, computed, onMounted, watch, nextTick } from "vue";
 import { Chart } from "chart.js/auto";
 
 const { data: config } = await useFetch("/api/config");
+const { bandColors, bandFill, thresholds } = useGlucoseBands(config);
 
-const verylow = config.value.glucose.verylow;
-const low = config.value.glucose.low;
-const target = config.value.glucose.target;
-const high = config.value.glucose.high;
-const veryhigh = config.value.glucose.veryhigh;
+const verylow = computed(() => thresholds.value.verylow);
+const low = computed(() => thresholds.value.low);
+const high = computed(() => thresholds.value.high);
+const veryhigh = computed(() => thresholds.value.veryhigh);
 
 let pieChart = null;
 let scatterChart = null;
@@ -147,19 +147,19 @@ async function renderCharts() {
     const total = values.length || 1;
 
     const counts = [
-      values.filter((v) => v < verylow).length,
-      values.filter((v) => v >= verylow && v < low).length,
-      values.filter((v) => v >= low && v <= high).length,
-      values.filter((v) => v > high && v <= veryhigh).length,
-      values.filter((v) => v > veryhigh).length,
+      values.filter((v) => v < verylow.value).length,
+      values.filter((v) => v >= verylow.value && v < low.value).length,
+      values.filter((v) => v >= low.value && v <= high.value).length,
+      values.filter((v) => v > high.value && v <= veryhigh.value).length,
+      values.filter((v) => v > veryhigh.value).length,
     ];
 
     const labels = [
-      `< ${verylow} mg/dl`,
-      `${verylow}–${low - 1} mg/dl`,
-      `${low}–${high} mg/dl`,
-      `${high + 1}–${veryhigh} mg/dl`,
-      `> ${veryhigh} mg/dl`,
+      `< ${verylow.value} mg/dl`,
+      `${verylow.value}–${low.value - 1} mg/dl`,
+      `${low.value}–${high.value} mg/dl`,
+      `${high.value + 1}–${veryhigh.value} mg/dl`,
+      `> ${veryhigh.value} mg/dl`,
     ];
 
     const percentLabels = labels.map((l, i) => {
@@ -175,11 +175,11 @@ async function renderCharts() {
           {
             data: counts,
             backgroundColor: [
-              "#d35400",
-              "#f39c12",
-              "#2ecc71",
-              "#3498db",
-              "#8e44ad",
+              bandColors.value.verylow,
+              bandColors.value.low,
+              bandColors.value.target,
+              bandColors.value.high,
+              bandColors.value.veryhigh,
             ],
           },
         ],
@@ -223,11 +223,11 @@ async function renderCharts() {
         }
 
         ctx.save();
-        zone("rgba(142,68,173,0.12)", veryhigh, y.max); // lila
-        zone("rgba(52,152,219,0.12)", high, veryhigh); // blau
-        zone("rgba(46,204,113,0.18)", low, high); // grün
-        zone("rgba(243,156,18,0.18)", verylow, low); // orange
-        zone("rgba(211,84,0,0.20)", 0, verylow); // <40
+        zone(bandFill("veryhigh", 0.12), veryhigh.value, y.max);
+        zone(bandFill("high", 0.12), high.value, veryhigh.value);
+        zone(bandFill("target", 0.18), low.value, high.value);
+        zone(bandFill("low", 0.18), verylow.value, low.value);
+        zone(bandFill("verylow", 0.20), 0, verylow.value);
         ctx.restore();
       },
     };

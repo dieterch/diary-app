@@ -13,6 +13,7 @@ const props = defineProps({
   targetHigh: { type: Number, default: 140 }
 })
 
+const { bandColors, bandFill } = useGlucoseBands()
 const canvas = ref(null)
 let chart = null
 
@@ -49,7 +50,7 @@ async function renderChart() {
       const yLow = yScale.getPixelForValue(props.targetLow)
       const yHigh = yScale.getPixelForValue(props.targetHigh)
       ctx.save()
-      ctx.fillStyle = 'rgba(60,179,113,0.12)' // pale green
+      ctx.fillStyle = bandFill('target', 0.12)
       ctx.fillRect(xScale.left, yHigh, xScale.right - xScale.left, yLow - yHigh)
       ctx.restore()
     }
@@ -64,13 +65,13 @@ async function renderChart() {
       datasets: [{
         label: 'Ø Blutzucker',
         data,
-        borderColor: '#1e78b2',
-        backgroundColor: 'rgba(30,120,178,0.08)',
+        borderColor: bandColors.value.high,
+        backgroundColor: bandFill('high', 0.08),
         fill: false,
         tension: 0.15,
         pointRadius: 4,
         pointBackgroundColor: '#fff',
-        pointBorderColor: '#1e78b2'
+        pointBorderColor: bandColors.value.high
       }]
     },
     options: {

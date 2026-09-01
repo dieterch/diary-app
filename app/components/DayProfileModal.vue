@@ -62,6 +62,8 @@ const props = defineProps({
 
 
 const emit = defineEmits(["update:modelValue"]);
+const { data: config } = await useFetch("/api/config");
+const { bandColors, bandFill, thresholds } = useGlucoseBands(config);
 
 const show = ref(props.modelValue);
 
@@ -172,10 +174,7 @@ async function renderChart() {
 
   // find max to decide y axis range (200 or 300)
   const maxDataValue = Math.max(...dataPoints.map(d=>d.y));
-  const yMax = maxDataValue > 200 ? 300 : 200;
-
-  const targetLow = 80;
-  const targetHigh = 140;
+  const yMax = Math.max(maxDataValue > 200 ? 300 : 200, thresholds.value.veryhigh);
 
   const { default: Chart } = await import("chart.js/auto");
 
@@ -187,12 +186,24 @@ async function renderChart() {
       const x = scales.x;
       if (!y || !x) return;
 
-      const yLow = y.getPixelForValue(targetLow);
-      const yHigh = y.getPixelForValue(targetHigh);
+      const limits = thresholds.value;
+
+      function zone(color, min, max) {
+        ctx.fillStyle = color;
+        ctx.fillRect(
+          x.left,
+          y.getPixelForValue(max),
+          x.right - x.left,
+          y.getPixelForValue(min) - y.getPixelForValue(max)
+        );
+      }
 
       ctx.save();
-      ctx.fillStyle = "rgba(60,179,113,0.12)";
-      ctx.fillRect(x.left, yHigh, x.right - x.left, yLow - yHigh);
+      zone(bandFill("veryhigh", 0.12), limits.veryhigh, y.max);
+      zone(bandFill("high", 0.12), limits.high, limits.veryhigh);
+      zone(bandFill("target", 0.18), limits.low, limits.high);
+      zone(bandFill("low", 0.18), limits.verylow, limits.low);
+      zone(bandFill("verylow", 0.20), 0, limits.verylow);
       ctx.restore();
     }
   };
@@ -205,12 +216,12 @@ async function renderChart() {
         {
           label: "Blutzucker",
           data: dataPoints, // {x: hour, y: value}
-          borderColor: "#1e78b2",
-          backgroundColor: "rgba(30,120,178,0.05)",
+          borderColor: bandColors.value.high,
+          backgroundColor: bandFill("high", 0.05),
           tension: 0.25,
           pointRadius: 4,
           pointBackgroundColor: "#fff",
-          pointBorderColor: "#1e78b2",
+          pointBorderColor: bandColors.value.high,
           fill: false,
           showLine: !isMultiDayProfile.value,
           parsing: false // we pass x/y directly

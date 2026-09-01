@@ -7,6 +7,7 @@
         <button @click="goDiary">📘 Tagebuch</button>
         <button @click="goAnalysis">📊 Analyse</button>
         <button @click="goStatistics">📈 Statistik</button>
+        <button @click="goSettings">⚙ Einstellungen</button>
       </div>
     </div>
 
@@ -166,6 +167,10 @@ function goStatistics() {
   menuOpen.value = false;
   router.push("/statistics");
 }
+function goSettings() {
+  menuOpen.value = false;
+  router.push("/settings");
+}
 
 /* Dialog */
 const dialogVisible = ref(false);
@@ -206,6 +211,7 @@ function openPeriodProfile(period) {
 
 /* Daten laden */
 const { data: config } = await useFetch("/api/config");
+const { colorForGlucose } = useGlucoseBands(config);
 
 const entries = ref([]);
 const loading = ref(false);
@@ -522,16 +528,7 @@ function openNote(i) {
 
 /* Farben */
 function sugarBackground(v) {
-  if (v == null) return "transparent";
-  const verylow = config.value?.glucose.verylow ?? 40;
-  const low = config.value?.glucose.low ?? 80;
-  const high = config.value?.glucose.high ?? 140;
-  const veryhigh = config.value?.glucose.veryhigh ?? 210;
-  if (v < verylow) return "#b33939";
-  if (v < low) return "#e1a32a";
-  if (v <= high) return "#3cb371";
-  if (v <= veryhigh) return "#25a7d9";
-  return "#6a0dad";
+  return colorForGlucose(v);
 }
 </script>
 

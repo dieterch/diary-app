@@ -4,6 +4,13 @@
     "low": 80,
     "target": 120,
     "high": 140,
-    "veryhigh": 210
+    "veryhigh": 210,
+    "colors": {
+      "verylow": "#b33939",
+      "low": "#e1a32a",
+      "target": "#3cb371",
+      "high": "#25a7d9",
+      "veryhigh": "#6a0dad"
+    }
   }
 }

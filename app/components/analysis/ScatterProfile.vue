@@ -13,6 +13,7 @@ const props = defineProps({
   targetHigh: { type: Number, default: 140 }
 })
 
+const { bandColors, bandFill } = useGlucoseBands()
 const canvas = ref(null)
 let chart = null
 
@@ -44,7 +45,7 @@ async function renderChart() {
       const yLow = yScale.getPixelForValue(props.targetLow)
       const yHigh = yScale.getPixelForValue(props.targetHigh)
       ctx.save()
-      ctx.fillStyle = 'rgba(60,179,113,0.12)'
+      ctx.fillStyle = bandFill('target', 0.12)
       ctx.fillRect(xScale.left, yHigh, xScale.right - xScale.left, yLow - yHigh)
       ctx.restore()
     }
@@ -53,7 +54,7 @@ async function renderChart() {
   if (chart) chart.destroy()
   chart = new Chart(canvas.value.getContext('2d'), {
     type: 'scatter',
-    data: { datasets: [{ label: 'Messwerte', data: pts, pointRadius: 3, pointBackgroundColor: '#1e78b2' }] },
+    data: { datasets: [{ label: 'Messwerte', data: pts, pointRadius: 3, pointBackgroundColor: bandColors.value.high }] },
     options: {
       responsive: true,
       maintainAspectRatio: false,

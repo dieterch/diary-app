@@ -8,25 +8,27 @@
 import { ref, onMounted, watch } from 'vue'
 
 const props = defineProps({ entries: { type: Array, default: () => [] } })
+const { bandColors, thresholds } = useGlucoseBands()
 const canvas = ref(null)
 let chart = null
 
 function categories(entries) {
+  const limits = thresholds.value
   const buckets = {
-    '<40': 0,
-    '40-79': 0,
-    '80-140': 0,
-    '141-210': 0,
-    '>210': 0
+    [`<${limits.verylow}`]: 0,
+    [`${limits.verylow}-${limits.low - 1}`]: 0,
+    [`${limits.low}-${limits.high}`]: 0,
+    [`${limits.high + 1}-${limits.veryhigh}`]: 0,
+    [`>${limits.veryhigh}`]: 0
   }
   for (const e of entries) {
     if (e.bloodSugar == null) continue
     const v = Number(e.bloodSugar)
-    if (v < 40) buckets['<40']++
-    else if (v < 80) buckets['40-79']++
-    else if (v <= 140) buckets['80-140']++
-    else if (v <= 210) buckets['141-210']++
-    else buckets['>210']++
+    if (v < limits.verylow) buckets[`<${limits.verylow}`]++
+    else if (v < limits.low) buckets[`${limits.verylow}-${limits.low - 1}`]++
+    else if (v <= limits.high) buckets[`${limits.low}-${limits.high}`]++
+    else if (v <= limits.veryhigh) buckets[`${limits.high + 1}-${limits.veryhigh}`]++
+    else buckets[`>${limits.veryhigh}`]++
   }
   return buckets
 }
@@ -44,7 +46,13 @@ async function renderChart() {
       labels,
       datasets: [{
         data,
-        backgroundColor: ['#d9534f','#f0ad4e','#49a94f','#09a7c6','#6a0dad']
+        backgroundColor: [
+          bandColors.value.verylow,
+          bandColors.value.low,
+          bandColors.value.target,
+          bandColors.value.high,
+          bandColors.value.veryhigh
+        ]
       }]
     },
     options: {
